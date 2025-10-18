@@ -1,7 +1,7 @@
 // ---------------- Enhanced NFA Simulator ----------------
-class EnhancedNFASimulator {
+class NFASimulator {
 public:
-    EnhancedNFASimulator(State *start, State *match, int numCaptures)
+    NFASimulator(State *start, State *match, int numCaptures)
         : start(start), matchstate(match), numCaptureGroups(numCaptures) {}
     
     bool match(const std::string &s) {
@@ -134,3 +134,4 @@ private:
         return false;
     }
 };
+
