@@ -24,37 +24,33 @@ struct CharClass {
 // ---------------- State ----------------
 struct State {
     StateType type;
-    int c;                          // character for STATE_CHAR
-    State *out = nullptr;           // first transition
-    State *out1 = nullptr;          // second transition (for SPLIT)
-    int lastlist = 0;               // bookkeeping for simulation
+    int c;                                      // character for STATE_CHAR
+    std::shared_ptr<State> out = nullptr;       // first transition
+    std::shared_ptr<State> out1 = nullptr;      // second transition (for SPLIT)
+    int lastlist = 0;                           // bookkeeping for simulation
     
     // Extended features
-    CharClass *charClass = nullptr; // for STATE_CHARCLASS
-    AssertionType assertion = ASSERT_NONE; // for STATE_ASSERTION
-    int captureIndex = -1;          // for capture groups
-    bool greedy = true;             // for controlling greedy/non-greedy
+    std::shared_ptr<CharClass> charClass = nullptr; // for STATE_CHARCLASS
+    AssertionType assertion = ASSERT_NONE;      // for STATE_ASSERTION
+    int captureIndex = -1;                      // for capture groups
+    bool greedy = true;                         // for controlling greedy/non-greedy
     
-    State(StateType t, int ch = 0, State *o = nullptr, State *o1 = nullptr)
+    State(StateType t, int ch = 0, std::shared_ptr<State> o = nullptr, std::shared_ptr<State> o1 = nullptr)
         : type(t), c(ch), out(o), out1(o1) {}
-    
-    ~State() {
-        delete charClass;
-    }
 };
 
 // ---------------- PtrList ----------------
 struct PtrList {
-    State **p;
-    PtrList *next;
-    PtrList(State **ptr, PtrList *n = nullptr) : p(ptr), next(n) {}
+    std::shared_ptr<State> *p;
+    std::shared_ptr<PtrList> next;
+    PtrList(std::shared_ptr<State> *ptr, std::shared_ptr<PtrList> n = nullptr) : p(ptr), next(n) {}
 };
 
 // ---------------- Fragment ----------------
 struct Frag {
-    State *start;
-    PtrList *out;
-    Frag(State *s = nullptr, PtrList *o = nullptr) : start(s), out(o) {}
+    std::shared_ptr<State> start;
+    std::shared_ptr<PtrList> out;
+    Frag(std::shared_ptr<State> s = nullptr, std::shared_ptr<PtrList> o = nullptr) : start(s), out(o) {}
 };
 
 // ---------------- Capture Group Info ----------------
