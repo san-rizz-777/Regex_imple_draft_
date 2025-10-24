@@ -2,11 +2,11 @@
 class NFABuilder {
 public:
     NFABuilder() {
-        matchstate = new State(STATE_MATCH);
+        matchstate = std::make_shared<State>(STATE_MATCH);
     }
     
     // Build NFA from postfix regex with extended syntax
-    State *build(const std::string &postfix) {
+    std::shared_ptr<State> build(const std::string &postfix) {
         Frag stack[1000], *stackp = stack;
         
         for (size_t i = 0; i < postfix.length(); i++) {
@@ -23,49 +23,49 @@ public:
                 case '|': { // Alternation
                     Frag e2 = *--stackp;
                     Frag e1 = *--stackp;
-                    State *s = new State(STATE_SPLIT, 0, e1.start, e2.start);
+                    auto s = std::make_shared<State>(STATE_SPLIT, 0, e1.start, e2.start);
                     *stackp++ = Frag(s, append(e1.out, e2.out));
                     break;
                 }
                 case '?': { // Zero or one
                     Frag e1 = *--stackp;
-                    State *s = new State(STATE_SPLIT, 0, e1.start, nullptr);
+                    auto s = std::make_shared<State>(STATE_SPLIT, 0, e1.start, nullptr);
                     s->greedy = true;
-                    *stackp++ = Frag(s, append(e1.out, new PtrList(&s->out1)));
+                    *stackp++ = Frag(s, append(e1.out, std::make_shared<PtrList>(&s->out1)));
                     break;
                 }
                 case '~': { // Non-greedy zero or one (??)
                     Frag e1 = *--stackp;
-                    State *s = new State(STATE_SPLIT, 0, nullptr, e1.start);
+                    auto s = std::make_shared<State>(STATE_SPLIT, 0, nullptr, e1.start);
                     s->greedy = false;
-                    *stackp++ = Frag(s, append(e1.out, new PtrList(&s->out)));
+                    *stackp++ = Frag(s, append(e1.out, std::make_shared<PtrList>(&s->out)));
                     break;
                 }
                 case '*': { // Zero or more
                     Frag e = *--stackp;
-                    State *s = new State(STATE_SPLIT, 0, e.start, nullptr);
+                    auto s = std::make_shared<State>(STATE_SPLIT, 0, e.start, nullptr);
                     s->greedy = true;
                     patch(e.out, s);
-                    *stackp++ = Frag(s, new PtrList(&s->out1));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out1));
                     break;
                 }
                 case '@': { // Non-greedy zero or more (*?)
                     Frag e = *--stackp;
-                    State *s = new State(STATE_SPLIT, 0, nullptr, e.start);
+                    auto s = std::make_shared<State>(STATE_SPLIT, 0, nullptr, e.start);
                     s->greedy = false;
                     patch(e.out, s);
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
                 case '+': { // One or more
                     Frag e = *--stackp;
-                    State *s = new State(STATE_SPLIT, 0, e.start, nullptr);
+                    auto s = std::make_shared<State>(STATE_SPLIT, 0, e.start, nullptr);
                     s->greedy = true;
                     patch(e.out, s);
-                    *stackp++ = Frag(e.start, new PtrList(&s->out1));
+                    *stackp++ = Frag(e.start, std::make_shared<PtrList>(&s->out1));
                     break;
                 }
-                      case '#': {
+                case '#': {
                     size_t j = i + 1;
                     int min = 0, max = 0;
                     std::string num;
@@ -90,47 +90,47 @@ public:
                     // local clone helper: deep-clone the fragment graph reachable from f.start
                     auto cloneFrag = [&](const Frag &f) -> Frag {
                         if (!f.start) return Frag(nullptr, nullptr);
-                        std::unordered_map<State*, State*> mp;
+                        std::unordered_map<State*, std::shared_ptr<State>> mp;
                         std::vector<State*> st;
-                        st.push_back(f.start);
+                        st.push_back(f.start.get());
                         while (!st.empty()) {
                             State *old = st.back(); st.pop_back();
                             if (!old || mp.count(old)) continue;
-                            mp[old] = new State(old->c, nullptr, nullptr);
-                            if (old->out && !mp.count(old->out)) st.push_back(old->out);
-                            if (old->out1 && !mp.count(old->out1)) st.push_back(old->out1);
+                            mp[old] = std::make_shared<State>(old->c, nullptr, nullptr);
+                            if (old->out && !mp.count(old->out.get())) st.push_back(old->out.get());
+                            if (old->out1 && !mp.count(old->out1.get())) st.push_back(old->out1.get());
                         }
                         // wire cloned nodes
                         for (auto &kv : mp) {
                             State *old = kv.first;
-                            State *nw  = kv.second;
-                            nw->out  = (old->out  && mp.count(old->out))  ? mp[old->out]  : old->out;
-                            nw->out1 = (old->out1 && mp.count(old->out1)) ? mp[old->out1] : old->out1;
+                            auto nw  = kv.second;
+                            nw->out  = (old->out  && mp.count(old->out.get()))  ? mp[old->out.get()]  : old->out;
+                            nw->out1 = (old->out1 && mp.count(old->out1.get())) ? mp[old->out1.get()] : old->out1;
                         }
                         // rebuild PtrList for out pointers (map &old->out -> &clone->out)
-                        PtrList *newHead = nullptr;
-                        PtrList **tail = &newHead;
-                        for (PtrList *p = f.out; p; p = p->next) {
-                            State **origPtr = p->p;
-                            State **newPtr = origPtr;
+                        std::shared_ptr<PtrList> newHead = nullptr;
+                        std::shared_ptr<PtrList> *tail = &newHead;
+                        for (auto p = f.out; p; p = p->next) {
+                            std::shared_ptr<State> *origPtr = p->p;
+                            std::shared_ptr<State> *newPtr = origPtr;
                             for (auto &kv : mp) {
                                 State *old = kv.first;
-                                State *clone = kv.second;
+                                auto clone = kv.second;
                                 if (origPtr == &old->out)  { newPtr = &clone->out;  break; }
                                 if (origPtr == &old->out1) { newPtr = &clone->out1; break; }
                             }
-                            PtrList *node = new PtrList(newPtr);
+                            auto node = std::make_shared<PtrList>(newPtr);
                             *tail = node;
                             tail = &node->next;
                         }
-                        return Frag(mp[f.start], newHead);
+                        return Frag(mp[f.start.get()], newHead);
                     };
 
                     // --- Build min copies in sequence (use clones, do NOT reuse e) ---
                     if (min == 0) {
                         // create an epsilon (split) fragment whose both branches are dangling
-                        State *eps = new State(SPLIT, nullptr, nullptr);
-                        result = Frag(eps, new PtrList(&eps->out, new PtrList(&eps->out1)));
+                        auto eps = std::make_shared<State>(SPLIT, nullptr, nullptr);
+                        result = Frag(eps, std::make_shared<PtrList>(&eps->out, std::make_shared<PtrList>(&eps->out1)));
                     } else {
                         // first copy
                         result = cloneFrag(e);
@@ -145,19 +145,19 @@ public:
                     if (max == -1) {
                         // min .. infinity: add a looping clone
                         Frag loop = cloneFrag(e);
-                        State *split = new State(SPLIT, loop.start, nullptr);
+                        auto split = std::make_shared<State>(SPLIT, loop.start, nullptr);
                         patch(result.out, split);       // after prefix go to split
                         patch(loop.out, split);         // after a loop copy go back to split
-                        result = Frag(result.start, new PtrList(&split->out1)); // split->out1 is exit (dangling)
+                        result = Frag(result.start, std::make_shared<PtrList>(&split->out1)); // split->out1 is exit (dangling)
                     } else {
                         // finite upper bound: for each optional repetition attach a SPLIT that goes to clone or skips
-                        PtrList *tail = result.out;
+                        std::shared_ptr<PtrList> tail = result.out;
                         for (int k = min; k < max; ++k) {
                             Frag opt = cloneFrag(e);
-                            State *split = new State(SPLIT, opt.start, nullptr);
+                            auto split = std::make_shared<State>(SPLIT, opt.start, nullptr);
                             patch(tail, split); // connect previous exits to this split
                             // new dangling outputs are opt.out and split->out1 (skip)
-                            tail = append(opt.out, new PtrList(&split->out1));
+                            tail = append(opt.out, std::make_shared<PtrList>(&split->out1));
                         }
                         result = Frag(result.start, tail);
                     }
@@ -168,43 +168,43 @@ public:
                 }
                 case '(': { // Start capture group
                     int capIndex = nextCaptureIndex++;
-                    State *s = new State(STATE_CAPTURE_START);
+                    auto s = std::make_shared<State>(STATE_CAPTURE_START);
                     s->captureIndex = capIndex;
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
                 case ')': { // End capture group - pop start, concatenate
                     Frag e2 = *--stackp; // the content
                     Frag e1 = *--stackp; // capture start
-                    State *endCap = new State(STATE_CAPTURE_END);
+                    auto endCap = std::make_shared<State>(STATE_CAPTURE_END);
                     endCap->captureIndex = e1.start->captureIndex;
                     
                     patch(e1.out, e2.start);
                     patch(e2.out, endCap);
-                    *stackp++ = Frag(e1.start, new PtrList(&endCap->out));
+                    *stackp++ = Frag(e1.start, std::make_shared<PtrList>(&endCap->out));
                     break;
                 }
                 case '^': { // Start of line assertion
-                    State *s = new State(STATE_ASSERTION);
+                    auto s = std::make_shared<State>(STATE_ASSERTION);
                     s->assertion = ASSERT_START_LINE;
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
                 case '$': { // End of line assertion
-                    State *s = new State(STATE_ASSERTION);
+                    auto s = std::make_shared<State>(STATE_ASSERTION);
                     s->assertion = ASSERT_END_LINE;
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
                 case 'B': { // Word boundary assertion (\b)
-                    State *s = new State(STATE_ASSERTION);
+                    auto s = std::make_shared<State>(STATE_ASSERTION);
                     s->assertion = ASSERT_WORD_BOUND;
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
                 case '[': { // Character class - parse until ']'
                     i++; // skip '['
-                    CharClass *cc = new CharClass();
+                    auto cc = std::make_shared<CharClass>();
                     
                     // Check for negation
                     if (i < postfix.length() && postfix[i] == '^') {
@@ -227,14 +227,14 @@ public:
                         }
                     }
                     
-                    State *s = new State(STATE_CHARCLASS);
+                    auto s = std::make_shared<State>(STATE_CHARCLASS);
                     s->charClass = cc;
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
                 default: { // Literal character
-                    State *s = new State(STATE_CHAR, (int)ch);
-                    *stackp++ = Frag(s, new PtrList(&s->out));
+                    auto s = std::make_shared<State>(STATE_CHAR, (int)ch);
+                    *stackp++ = Frag(s, std::make_shared<PtrList>(&s->out));
                     break;
                 }
             }
@@ -246,20 +246,20 @@ public:
         return e.start;
     }
     
-    State *getMatchState() const { return matchstate; }
+    std::shared_ptr<State> getMatchState() const { return matchstate; }
     int getCaptureCount() const { return nextCaptureIndex; }
 
 private:
-    State *matchstate;
+    std::shared_ptr<State> matchstate;
     int nextCaptureIndex = 0;
     
-    static void patch(PtrList *l, State *s) {
+    static void patch(std::shared_ptr<PtrList> l, std::shared_ptr<State> s) {
         for (; l; l = l->next) *(l->p) = s;
     }
     
-    static PtrList *append(PtrList *l1, PtrList *l2) {
+    static std::shared_ptr<PtrList> append(std::shared_ptr<PtrList> l1, std::shared_ptr<PtrList> l2) {
         if (!l1) return l2;
-        PtrList *p = l1;
+        auto p = l1;
         while (p->next) p = p->next;
         p->next = l2;
         return l1;
