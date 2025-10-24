@@ -1,7 +1,7 @@
 // ---------------- Enhanced NFA Simulator ----------------
 class NFASimulator {
 public:
-    NFASimulator(State *start, State *match, int numCaptures)
+    NFASimulator(std::shared_ptr<State> start, std::shared_ptr<State> match, int numCaptures)
         : start(start), matchstate(match), numCaptureGroups(numCaptures) {}
     
     bool match(const std::string &s) {
@@ -28,7 +28,7 @@ public:
 
 private:
     struct ListItem {
-        State *state;
+        std::shared_ptr<State> state;
         std::vector<CaptureGroup> caps;
     };
     
@@ -37,14 +37,14 @@ private:
         void clear() { items.clear(); }
     };
     
-    State *start;
-    State *matchstate;
+    std::shared_ptr<State> start;
+    std::shared_ptr<State> matchstate;
     int listid = 0;
     List l1, l2;
     int numCaptureGroups;
     std::vector<CaptureGroup> captures;
     
-    void addState(List *l, State *s, const std::string &input, int pos, 
+    void addState(List *l, std::shared_ptr<State> s, const std::string &input, int pos, 
                   std::vector<CaptureGroup> caps) {
         if (!s || s->lastlist == listid) return;
         s->lastlist = listid;
@@ -81,7 +81,7 @@ private:
         }
     }
     
-    bool checkAssertion(State *s, const std::string &input, int pos) {
+    bool checkAssertion(std::shared_ptr<State> s, const std::string &input, int pos) {
         switch (s->assertion) {
             case ASSERT_START_LINE:
                 return pos == 0;
@@ -101,7 +101,7 @@ private:
         return before != after;
     }
     
-    List *startList(State *s, List *l, int pos) {
+    List *startList(std::shared_ptr<State> s, List *l, int pos) {
         listid++;
         l->clear();
         std::vector<CaptureGroup> caps(numCaptureGroups);
@@ -114,7 +114,7 @@ private:
         nlist->clear();
         
         for (auto &item : clist->items) {
-            State *s = item.state;
+            auto s = item.state;
             if (s->type == STATE_CHAR && s->c == input[pos]) {
                 addState(nlist, s->out, input, pos + 1, item.caps);
             } else if (s->type == STATE_CHARCLASS && 
@@ -134,4 +134,3 @@ private:
         return false;
     }
 };
-
